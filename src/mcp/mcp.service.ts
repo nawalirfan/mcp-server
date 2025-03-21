@@ -1,30 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { IncomingMessage } from 'http';
 import { z } from 'zod';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { Response } from 'express';
 
 const execAsync = promisify(exec);
 
 @Injectable()
 export class McpService {
   private readonly server: McpServer;
-  private readonly transport: StdioServerTransport;
-
+  private transport: SSEServerTransport;
   constructor() {
-    this.server = new McpServer({
-      name: 'example-server',
-      version: '1.0.0',
-    });
-    this.transport = new StdioServerTransport();
+    this.server = new McpServer(
+      { name: 'mcp-server', version: '1.0.0' },
+      {
+        capabilities: {
+          tools: {},
+          prompts: {},
+          resources: {},
+        },
+      },
+    );
   }
 
   async onModuleInit() {
     this.registerTools();
-
-    await this.server.connect(this.transport);
-    console.log('✅ MCP Server running...');
   }
 
   private async registerTools() {
@@ -58,7 +61,7 @@ export class McpService {
     console.log('✅ Tools Registered: ');
   }
 
-  doSomething(name: string) {
+  private doSomething(name: string) {
     return {
       content: [
         {
@@ -69,7 +72,7 @@ export class McpService {
     };
   }
 
-  async runNmapScan(
+  private async runNmapScan(
     target: string,
     ports: string,
     scanType: string,
@@ -125,7 +128,22 @@ export class McpService {
     }
   }
 
-  getServer(): McpServer {
-    return this.server;
+  async sse(res: Response) {
+    try {
+      this.transport = new SSEServerTransport('/mcp/messages', res);
+      await this.server.connect(this.transport);
+    } catch (error: any) {
+      console.log('🚀 ~ McpService ~ sse ~ error:', error);
+    }
+  }
+
+  async messages(req: IncomingMessage, res: Response, body: unknown) {
+    try {
+      if (this.transport) {
+        this.transport.handlePostMessage(req, res, body);
+      }
+    } catch (error: any) {
+      console.log('🚀 ~ McpService ~ messages ~ error:', error);
+    }
   }
 }
