@@ -44,7 +44,7 @@ export class McpService {
       {
         target: z.string(),
         ports: z.string().optional(), // e.g. "22-80" or "80,443" or null for default
-        scanType: z.enum(['quick', 'full', 'version']).default('quick'),
+        scanType: z.enum(['quick', 'full', 'version']).default('full'),
         timing: z.number().min(0).max(5).default(3), // T0-T5 timing templates
         additionalFlags: z.string().optional(),
       },
@@ -88,7 +88,9 @@ export class McpService {
         command += ' -F'; // Fast scan
         break;
       case 'full':
-        command += ' -p-'; // All ports
+        if (!ports) {
+          command += ' -p-'; // All ports
+        }
         break;
       case 'version':
         command += ' -sV'; // Version detection
@@ -108,6 +110,7 @@ export class McpService {
     // Add target
     command += ` ${target}`;
 
+    console.log('🚀 ~ McpService ~ command:', command);
     try {
       const { stdout, stderr } = await execAsync(command);
       if (stderr) {
